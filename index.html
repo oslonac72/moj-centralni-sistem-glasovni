@@ -1,1 +1,264 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Moj centralni sistem – Glasovni unos</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f1f4f8;
+      color: #202b3c;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: 35px auto;
+      padding: 25px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 5px 22px #00000012;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 25px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #687386;
+      margin-bottom: 25px;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 7px;
+      font-weight: bold;
+    }
+
+    select, textarea, button {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    select, textarea {
+      border: 1px solid #ccd4df;
+      background: white;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: Arial, sans-serif;
+    }
+
+    button {
+      border: 0;
+      margin-top: 12px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .voice {
+      background: #1f4e78;
+      color: white;
+    }
+
+    .send {
+      background: #198754;
+      color: white;
+    }
+
+    #status {
+      margin-top: 18px;
+      padding: 13px;
+      background: #f1f4f8;
+      border-radius: 8px;
+      text-align: center;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .help {
+      margin-top: 22px;
+      padding: 15px;
+      background: #f5f7fa;
+      border-radius: 10px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>MOJ CENTRALNI SISTEM</h1>
+    <div class="subtitle">Glasovni unos podataka</div>
+
+    <label for="language">Jezik prepoznavanja:</label>
+    <select id="language">
+      <option value="bs-BA" selected>Bosanski</option>
+      <option value="hr-HR">Hrvatski</option>
+      <option value="sr-RS">Srpski</option>
+      <option value="en-US">Engleski (SAD)</option>
+    </select>
+
+    <label for="command">Prepoznati ili upisani tekst:</label>
+    <textarea id="command"
+      placeholder="Ovdje će se pojaviti prepoznati govor..."></textarea>
+
+    <button class="voice" id="voiceButton" type="button"
+      onclick="startVoice()">
+      🎤 GOVORI
+    </button>
+
+    <button class="send" id="sendButton" type="button"
+      onclick="sendCommand()">
+      SAČUVAJ U GOOGLE SHEETS
+    </button>
+
+    <div id="status">Sistem je spreman.</div>
+
+    <div class="help">
+      <strong>Primjeri naredbi:</strong><br>
+      Trošak 35 KM, gorivo, gotovina<br>
+      Prihod 500 KM, prodaja<br>
+      Zadatak: Nazvati dobavljača, rok sutra<br>
+      Kontakt: Marko Marković, telefon 061123456
+    </div>
+  </div>
+
+  <script>
+    const APP_URL =
+      "https://script.google.com/macros/s/AKfycbwxrtXitsacTQao9desfquS_mZuCK03n9F_kXpl5b0Scuv8ap6xWhkAzYnwbqqBQHvldg/exec";
+
+    const commandBox = document.getElementById("command");
+    const statusBox = document.getElementById("status");
+    const voiceButton = document.getElementById("voiceButton");
+    const sendButton = document.getElementById("sendButton");
+
+    function startVoice() {
+      const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        statusBox.textContent =
+          "Ovaj preglednik ne podržava prepoznavanje govora. Koristi noviju verziju Chromea.";
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+
+      recognition.lang =
+        document.getElementById("language").value;
+
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      voiceButton.disabled = true;
+      statusBox.textContent = "Slušam... Govori sada.";
+
+      recognition.onresult = function(event) {
+        let transcript = "";
+
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        commandBox.value = transcript;
+
+        if (event.results[event.results.length - 1].isFinal) {
+          statusBox.textContent =
+            "Govor je prepoznat. Provjeri tekst prije slanja.";
+        }
+      };
+
+      recognition.onerror = function(event) {
+        const messages = {
+          "not-allowed": "Chrome nema dozvolu za mikrofon.",
+          "no-speech": "Nije prepoznat govor. Pokušaj ponovo.",
+          "network": "Greška internetske veze ili servisa za prepoznavanje govora.",
+          "language-not-supported": "Izabrani jezik nije podržan. Probaj drugi jezik."
+        };
+
+        statusBox.textContent =
+          messages[event.error] ||
+          "Greška prepoznavanja: " + event.error;
+      };
+
+      recognition.onend = function() {
+        voiceButton.disabled = false;
+
+        if (!commandBox.value.trim()) {
+          statusBox.textContent =
+            "Slušanje je završeno. Nije prepoznat tekst.";
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        voiceButton.disabled = false;
+        statusBox.textContent =
+          "Nije moguće pokrenuti mikrofon: " + error.message;
+      }
+    }
+
+    function sendCommand() {
+      const command = commandBox.value.trim();
+
+      if (!command) {
+        statusBox.textContent =
+          "Prvo izgovori ili upiši naredbu.";
+        return;
+      }
+
+      statusBox.textContent =
+        "Šaljem podatke u Google Sheets...";
+
+      sendButton.disabled = true;
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = APP_URL;
+      form.target = "_self";
+
+      const fields = {
+        command: command,
+        requestId: (
+          window.crypto && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now() + "-" + Math.random().toString(36).slice(2)
+        )
+      };
+
+      Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+    }
+  </script>
+</body>
+</html>
 
