@@ -149,75 +149,122 @@
     const statusBox = document.getElementById("status");
     const voiceButton = document.getElementById("voiceButton");
     const sendButton = document.getElementById("sendButton");
+    let recognition = null;
+    let isListening = false;
+    let textBeforeListening = "";
+    let voiceError = "";
 
-    function startVoice() {
-      const SpeechRecognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
+    
+function startVoice() {
 
-      if (!SpeechRecognition) {
-        statusBox.textContent =
-          "Ovaj preglednik ne podržava prepoznavanje govora. Koristi noviju verziju Chromea.";
-        return;
-      }
+  // Ako mikrofon već radi, zaustavi diktiranje.
+  if (isListening && recognition) {
+    voiceButton.disabled = true;
+    statusBox.textContent = "Završavam diktiranje...";
 
-      const recognition = new SpeechRecognition();
+    recognition.stop();
+    return;
+  }
 
-      recognition.lang =
-        document.getElementById("language").value;
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
 
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
+  if (!SpeechRecognition) {
+    statusBox.textContent =
+      "Prepoznavanje govora nije podržano u ovom pregledniku.";
+    return;
+  }
 
-      voiceButton.disabled = true;
-      statusBox.textContent = "Slušam... Govori sada.";
+  textBeforeListening = commandBox.value.trim();
+  voiceError = "";
 
-      recognition.onresult = function(event) {
-        let transcript = "";
+  const currentRecognition = new SpeechRecognition();
+  recognition = currentRecognition;
 
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
+  currentRecognition.lang =
+    document.getElementById("language").value;
 
-        commandBox.value = transcript;
+  // Kontinuirano diktiranje
+  currentRecognition.continuous = true;
+  currentRecognition.interimResults = true;
+  currentRecognition.maxAlternatives = 1;
 
-        if (event.results[event.results.length - 1].isFinal) {
-          statusBox.textContent =
-            "Govor je prepoznat. Provjeri tekst prije slanja.";
-        }
-      };
+  isListening = true;
 
-      recognition.onerror = function(event) {
-        const messages = {
-          "not-allowed": "Chrome nema dozvolu za mikrofon.",
-          "no-speech": "Nije prepoznat govor. Pokušaj ponovo.",
-          "network": "Greška internetske veze ili servisa za prepoznavanje govora.",
-          "language-not-supported": "Izabrani jezik nije podržan. Probaj drugi jezik."
-        };
+  voiceButton.disabled = false;
+  voiceButton.textContent = "■ ZAVRŠI DIKTIRANJE";
 
-        statusBox.textContent =
-          messages[event.error] ||
-          "Greška prepoznavanja: " + event.error;
-      };
+  statusBox.textContent =
+    "Slušam... Govori svojim tempom. Možeš praviti pauze.";
 
-      recognition.onend = function() {
-        voiceButton.disabled = false;
+  currentRecognition.onresult = function(event) {
 
-        if (!commandBox.value.trim()) {
-          statusBox.textContent =
-            "Slušanje je završeno. Nije prepoznat tekst.";
-        }
-      };
+    let transcript = "";
 
-      try {
-        recognition.start();
-      } catch (error) {
-        voiceButton.disabled = false;
-        statusBox.textContent =
-          "Nije moguće pokrenuti mikrofon: " + error.message;
-      }
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript + " ";
     }
+
+    const currentText = transcript
+      .trim()
+      .replace(/\s+/g, " ");
+
+    commandBox.value = [
+      textBeforeListening,
+      currentText
+    ].filter(Boolean).join(" ");
+
+    statusBox.textContent =
+      "Diktiranje je aktivno. Pritisni ZAVRŠI DIKTIRANJE kada završiš.";
+  };
+
+  currentRecognition.onerror = function(event) {
+
+    const messages = {
+      "not-allowed": "Chrome nema dozvolu za mikrofon.",
+      "no-speech": "Nije prepoznat govor.",
+      "network": "Problem s internetskom vezom ili servisom govora.",
+      "language-not-supported": "Izabrani jezik nije podržan."
+    };
+
+    voiceError = messages[event.error] ||
+      "Greška prepoznavanja: " + event.error;
+
+    statusBox.textContent = voiceError;
+  };
+
+  currentRecognition.onend = function() {
+
+    isListening = false;
+    recognition = null;
+
+    voiceButton.disabled = false;
+    voiceButton.textContent = "🎤 NASTAVI DIKTIRANJE";
+
+    if (voiceError) {
+      statusBox.textContent = voiceError;
+    } else if (commandBox.value.trim()) {
+      statusBox.textContent =
+        "Diktiranje je završeno. Provjeri tekst prije spremanja.";
+    } else {
+      statusBox.textContent =
+        "Nije prepoznat tekst. Pokušaj ponovo.";
+    }
+  };
+
+  try {
+    currentRecognition.start();
+  } catch (error) {
+    isListening = false;
+    recognition = null;
+    voiceButton.textContent = "🎤 GOVORI";
+
+    statusBox.textContent =
+      "Nije moguće pokrenuti mikrofon: " + error.message;
+  }
+}
+
 
     function sendCommand() {
       const command = commandBox.value.trim();
